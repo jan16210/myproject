@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Button Page</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+        .play-button {
+            padding: 20px 40px;
+            font-size: 24px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .play-button:hover {
+            background-color: #45a049;
+            transform: scale(1.05);
+        }
+        .play-button:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
+    <button class="play-button" onclick="redirectToNewPage()">Play</button>
+
+    <script>
+        function redirectToNewPage() {
+            // Change 'another_page.html' to the URL you want to redirect to
+            window.location.href = 'another_page.html'; 
+        }
+    </script>
+</body>
+</html>
