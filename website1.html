@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P5.js Drawing Canvas with Play Button and Teachable Machine</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.js"></script>
+    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script> <!-- ml5.js handles TF.js -->
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column; /* Allow vertical alignment */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: sans-serif; /* From button template */
+            color: #333;
+        }
+        #button-container {
+            display: flex; /* Initially visible */
+            justify-content: center;
+            align-items: center;
+            height: 100vh; /* Make button centered on full page initially */
+        }
+        .play-button {
+            padding: 20px 40px;
+            font-size: 24px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .play-button:hover {
+            background-color: #45a049;
+            transform: scale(1.05);
+        }
+        .play-button:active {
+            transform: scale(0.98);
+        }
+        #p5-canvas-container {
+            display: none; /* Initially hidden */
+            justify-content: center;
+            align-items: center;
+            flex-direction: column; /* To stack canvas, result, and clear button */
+        }
+        canvas {
+            border: 2px solid #333;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        #prediction-result {
+            margin-top: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            text-align: center;
+        }
+        #clear-button {
+            margin-top: 10px;
+            background-color: #f44336; /* Red for clear */
+        }
+        #clear-button:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div id="button-container">
+        <button class="play-button" onclick="startGame()">Start Drawing</button>
+    </div>
+
+    <div id="p5-canvas-container">
+        <!-- p5.js canvas will be placed here by the p5.js script -->
+        <div id="prediction-result">Model loading...</div>
+        <button id="clear-button" class="play-button">Clear Canvas</button>
+    </div>
+
+    <script>
+        let p5Instance = null; // To hold the p5.js sketch instance
+        let classifier;        // ml5 image classifier
+        let class_labels = []; // To store class names from the model
+        const imageSize = 224; // Teachable Machine model expects 224x224 input
+        // Your Teachable Machine model URL (from 'Export Model' -> 'TensorFlow.js' -> 'Web' -> 'Upload my model' or 'Download my model' then host)
+        const TM_URL = "https://teachablemachine.withgoogle.com/models/7NVpZYw2V/";
+
+        function startGame() {
+            document.getElementById('button-container').style.display = 'none';
+            document.getElementById('p5-canvas-container').style.display = 'flex'; // Use flex to stack elements
+
+            p5Instance = new p5(s => {
+                s.setup = () => {
+                    s.createCanvas(600, 400); // Adjust canvas size as needed
+                    s.background(255); // White background for drawing
+                    s.pixelDensity(1); // Ensure consistent pixel density for image processing
+
+                    // Load the image classifier model from Teachable Machine URL
+                    ml5.imageClassifier(TM_URL + 'model.json', s.onModelReady);
+
+                    // Attach clear button event listener here, after p5Instance is created
+                    document.getElementById('clear-button').onclick = s.clearCanvas;
+                };
+
+                s.onModelReady = (error, model_instance) => {
+                    if (error) {
+                        console.error("Error loading model:", error);
+                        document.getElementById('prediction-result').innerText = 'Error loading model!';
+                        return;
+                    }
+                    classifier = model_instance; // Set the classifier instance
+                    console.log('Teachable Machine Model Loaded!');
+                    if (classifier && classifier.metadata && classifier.metadata.labels) {
+                        class_labels = classifier.metadata.labels;
+                        console.log('Class labels:', class_labels);
+                        document.getElementById('prediction-result').innerText = 'Model ready! Draw something!';
+                    }
+                };
+
+                s.draw = () => {
+                    if (s.mouseIsPressed) {
+                        s.stroke(0); // Black stroke
+                        s.strokeWeight(10); // Thicker stroke for drawing
+                        s.line(s.pmouseX, s.pmouseY, s.mouseX, s.mouseY);
+                    }
+                };
+
+                s.classifyCanvas = () => {
+                    if (!classifier) {
+                        console.log('Classifier not loaded yet!');
+                        document.getElementById('prediction-result').innerText = 'Model not ready. Please wait.';
+                        return;
+                    }
+
+                    // Get the current canvas content as an image
+                    let img = s.get();
+                    // Resize it to the model's expected input size
+                    img.resize(imageSize, imageSize);
+
+                    classifier.classify(img, (error, results) => {
+                        if (error) {
+                            console.error(error);
+                            document.getElementById('prediction-result').innerText = 'Error during prediction.';
+                            return;
+                        }
+                        // results will contain predictions from your Teachable Machine model
+                        if (results && results.length > 0) {
+                            const prediction = results[0].label;
+                            const confidence = results[0].confidence;
+                            document.getElementById('prediction-result').innerText = `Prediction: ${prediction} (${(confidence * 100).toFixed(2)}%)`;
+                        }
+                    });
+                };
+                
+                // Trigger classification on mouse release after a short delay
+                s.mouseReleased = () => {
+                    setTimeout(() => {
+                        s.classifyCanvas();
+                    }, 200);
+                };
+                
+                // Function to clear the canvas
+                s.clearCanvas = () => {
+                    s.background(255); // Clear to white background
+                    document.getElementById('prediction-result').innerText = 'Draw something!';
+                };
+
+            }, 'p5-canvas-container'); // Attach the sketch to the container with ID 'p5-canvas-container'
+        }
+    </script>
+</body>
+</html>

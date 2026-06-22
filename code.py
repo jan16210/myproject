@@ -1,59 +1,78 @@
-
-
 import Flask
 from flask import Flask, request, jsonify
 from PIL import Image
 import numpy as np
 import io
 import base64
+import tensorflow as tf # Import TensorFlow
 
-# Assuming 'model' and 'class_names' are loaded from previous cells
-# If running this Flask app standalone, ensure the model and labels are loaded here:
-# model = tf.keras.models.load_model('keras_model.h5', compile=False)
-# with open('labels.txt', 'r') as f:
-#     class_names = [line.strip() for line in f.readlines()]
-# input_shape = model.input_shape
-# image_size = input_shape[1]
 
 app = Flask(__name__)
 
+# --- GLOBAL VARIABLES FOR TEACHABLE MACHINE MODEL ---
+# Define the path to your Teachable Machine Keras model file
+MODEL_PATH = 'keras_model.h5' # <--- IMPORTANT: Update this path!
+# Define the path to your labels file
+LABELS_PATH = 'labels.txt' # <--- IMPORTANT: Update this path!
+
+# Define the image size your model expects
+IMAGE_SIZE = 224 # <--- IMPORTANT: Update this if your model uses a different size
+
+# Load the Teachable Machine model and class names once when the app starts
+try:
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    with open(LABELS_PATH, 'r') as f:
+        class_names = [line.strip() for line in f]
+    print("Teachable Machine model and labels loaded successfully.")
+except Exception as e:
+    print(f"Error loading Teachable Machine model or labels: {e}")
+    model = None
+    class_names = []
+# --- END GLOBAL VARIABLES ---
+
+
 @app.route('/predict', methods=['POST'])
 def predict():
+    if model is None or not class_names:
+        return jsonify({'error': 'Model not loaded. Check server logs.'}), 500
+
     data = request.get_json()
     if 'image' not in data:
         return jsonify({'error': 'No image data provided'}), 400
 
-    # Decode the base64 image data
-    image_data = data['image'].split(',')[1] # Remove 'data:image/png;base64,' prefix
-    image_bytes = base64.b64decode(image_data)
-    img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+    try:
+        image_data = data['image'].split(',')[1] # Assumes base64 starts with 'data:image/png;base64,'
+        image_bytes = base64.b64decode(image_data)
+        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
 
-    # Preprocess the image (same as in previous cells)
-    img = img.resize((image_size, image_size))
-    img_array = np.asarray(img)
-    normalized_image_array = (img_array.astype(np.float32) / 127.0) - 1
-    data = np.ndarray(shape=(1, image_size, image_size, 3), dtype=np.float32)
-    data[0] = normalized_image_array
+        # Resize the image to the model's expected input size
+        img = img.resize((IMAGE_SIZE, IMAGE_SIZE))
+        img_array = np.asarray(img)
 
-    # Make a prediction
-    prediction = model.predict(data)
-    index = np.argmax(prediction)
-    class_name = class_names[index]
-    confidence_score = float(prediction[0][index]) # Convert to float for JSON serialization
+        # Normalize the image array as expected by Teachable Machine models
+        normalized_image_array = (img_array.astype(np.float32) / 127.0) - 1
+        data = np.ndarray(shape=(1, IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.float32)
+        data[0] = normalized_image_array
 
-    return jsonify({
-        'prediction': class_name,
-        'confidence': confidence_score
-    })
+        # Make prediction
+        prediction = model.predict(data)
+        index = np.argmax(prediction)
+        class_name = class_names[index]
+        confidence_score = float(prediction[0][index]) # Convert to float for JSON serialization
+
+        return jsonify({
+            'prediction': class_name,
+            'confidence': confidence_score
+        })
+    except Exception as e:
+        return jsonify({'error': f'Prediction failed: {e}'}), 500
 
 @app.route('/')
 def home():
     return "Teachable Machine Prediction Backend is running! Send POST requests to /predict."
 
 if __name__ == '__main__':
-    # You can run this directly in your VS Code terminal:
-    # python your_flask_app.py
-    # Or if running from a notebook, you might need special handling for Flask.
-    # For simplicity, save this code to a file (e.g., app.py) and run it.
     print("Starting Flask server...")
+    # In a production environment, you should use a WSGI server like Gunicorn
+    # app.run(debug=True, host='0.0.0.0', port=5000) # Use host='0.0.0.0' to make it accessible externally
     app.run(debug=True, port=5000)
