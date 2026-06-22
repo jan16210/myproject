@@ -1,4 +1,4 @@
-import Flask
+
 from flask import Flask, request, jsonify
 from PIL import Image
 import numpy as np
