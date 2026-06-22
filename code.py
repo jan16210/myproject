@@ -1,11 +1,12 @@
 
 from flask import Flask, request, jsonify
-from PIL import Image
 import numpy as np
 import io
 import base64
 import tensorflow as tf # Import TensorFlow
-
+import os
+import io
+from PIL import Image, ImageOps
 
 app = Flask(__name__)
 
